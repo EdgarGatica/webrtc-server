@@ -3,64 +3,117 @@ import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import play.libs.Json;
+import scala.util.Random;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 public class SignalingServer extends AbstractActor {
-
+    private static Random generator = new Random();
+    private static Map<Integer, ActorRef> connectionMap = new ConcurrentHashMap<>(20, 0.75f, 20);
     private String name;
+    private int id;
     private final ActorRef out;
 
     public SignalingServer(ActorRef out) {
         this.out = out;
     }
 
-    // public String getName() {
-    //     return this.name;
-    // }
-
-    // @Override
-    // public void update() {
-    //     JsonNode correction =  (JsonNode) corrections.getUpdate(this);
-    //     if (correction != null) {
-    //         out.tell(correction, self());
-    //     }
-    // }
-
-    // @Override
-    // public void setSubject(Subject sub) {
-    //     this.corrections = sub;
-    // }
-
+    /**
+     * Method for handling incoming messages.
+     * @return
+     */
     @Override
     public Receive createReceive() {
         return receiveBuilder()
                 .match(JsonNode.class, (msg) -> {
-                    String type = msg.path("type").asText();
-                    if(type.equalsIgnoreCase("ready")) {
-                        out.tell(Json.newObject()
-                                    .put("type", "name")
-                                    .set("message", Json.newObject().put("name", this.name)),
-                                self()
-                        );
-                    } else if(type.equalsIgnoreCase("register")) {
-                        this.name = msg.path("name").asText();
-                        // corrections.register(this);
+                    String destination = msg.path("destination").asText();
+                    if(destination.equals("server")) {
+                        System.out.println(msg);
+                    } else if(destination.equals("broadcast")) {
+                        for (Map.Entry<Integer, ActorRef> entry : connectionMap.entrySet()) {
+                            if(entry.getKey() == this.id) {
+                                continue;
+                            }
+                            entry.getValue().tell(Json.newObject()
+                                        .put("type", "broadcast")
+                                        .put("source", this.id)
+                                        .put("message", msg.path("message").asText()),
+                                    self());
+                        }
+                    } else if(msg.path("destination").isIntegralNumber()) {
+                        int destinationID = msg.path("destination").asInt();
+                        connectionMap.get(destinationID).tell(Json.newObject()
+                                        .put("type", "direct")
+                                        .put("source", this.id)
+                                        .put("message", msg.path("message").asText()),
+                                self());
                     }
                 })
                 .build();
     }
 
+    /**
+     * Callback for a closed connection.
+     */
     @Override
     public void postStop() {
-        // corrections.unregister(this);
+        connectionMap.remove(this.id);
+//        for (Map.Entry<Integer, ActorRef> entry : connectionMap.entrySet()) {
+//            entry.getValue().tell(Json.newObject()
+//                            .put("type", "user_exit")
+//                            .put("source", "server")
+//                            .put("message", this.id),
+//                    self());
+//        }
+        ArrayNode userIDs = Json.newArray();
+        for(Integer id : connectionMap.keySet()) {
+            System.out.println(id);
+            userIDs.add(id);
+        }
+        for (Map.Entry<Integer, ActorRef> entry : connectionMap.entrySet()) {
+            entry.getValue().tell(Json.newObject()
+                            .put("type", "current_user_list")
+                            .put("source", "server")
+                            .set("message", userIDs),
+                    self());
+        }
     }
 
+    /**
+     * Callback for an established connection.
+     */
     @Override
     public void preStart() {
-        // setSubject(LabController.corrections);
-        this.name = self().path().toStringWithoutAddress();
-        // corrections.preRegister(this);
+        this.id = generator.nextInt(10000);
+        out.tell(Json.newObject()
+                    .put("type", "id")
+                    .put("message", this.id),
+                self()
+        );
+//        for (Map.Entry<Integer, ActorRef> entry : connectionMap.entrySet()) {
+//            entry.getValue().tell(Json.newObject()
+//                            .put("type", "user_join")
+//                            .put("source", "server")
+//                            .put("message", this.id),
+//                    self());
+//        }
+        connectionMap.put(this.id, this.out);
+        ArrayNode userIDs = Json.newArray();
+        for(Integer id : connectionMap.keySet()) {
+            System.out.println(id);
+            userIDs.add(id);
+        }
+        for (Map.Entry<Integer, ActorRef> entry : connectionMap.entrySet()) {
+            entry.getValue().tell(Json.newObject()
+                            .put("type", "current_user_list")
+                            .put("source", "server")
+                            .set("message", userIDs),
+                    self());
+        }
     }
 
     public static Props props(ActorRef out) {

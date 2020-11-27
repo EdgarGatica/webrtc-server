@@ -1,5 +1,25 @@
 @()
 
 @main("Welcome to Play") {
-  <h1>Welcome to Play!</h1>
+<div class="row justify-content-md-center mb-1">
+  <button type="button" class="btn btn-success" id="connectButton" onclick="socketConnect()">Connect</button>
+  <button type="button" class="btn btn-secondary" id="disconnectButton" onclick="socketDisconnect()" disabled>Disconnect</button>
+</div>
+<div class="form-group row">
+  <ul class="list-group col-3" id="user-list">
+<!--    <li class="list-group-item disabled" aria-disabled="true">Cras justo odio</li>-->
+<!--    <li class="list-group-item">Dapibus ac facilisis in</li>-->
+<!--    <li class="list-group-item">Morbi leo risus</li>-->
+<!--    <li class="list-group-item">Porta ac consectetur ac</li>-->
+<!--    <li class="list-group-item">Vestibulum at eros</li>-->
+  </ul>
+  <label for="incomingMessages" class="sr-only">Large textarea</label>
+  <textarea rows="12" class="form-control col-9" id="incomingMessages" readonly></textarea>
+</div>
+<div class="input-group mb-3">
+  <input type="text" id="outgoingMessage" class="form-control" placeholder="Message" aria-label="Message" aria-describedby="button-addon2">
+  <div class="input-group-append">
+    <button class="btn btn-outline-primary" type="button" id="button-addon2" onclick="sendMessage()">Send</button>
+  </div>
+</div>
 }

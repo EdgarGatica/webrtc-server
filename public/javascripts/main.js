@@ -18,7 +18,7 @@ if (navigator.webkitGetUserMedia) {
         media_element.src = URL.createObjectURL(media_stream);
     };
 } else {
-    alert("You must use the Google Chrome browser to access videoconference.");
+//    alert("You must use the Google Chrome browser to access videoconference.");
     webrtc_capable = false;
 }
 
@@ -129,7 +129,8 @@ function setup_signaling_server() {
         ]});
     if(ringer == null)
         ringer = document.getElementById("ringer");
-    signaling_server = new WebSocket(apphost + "/signaling/" + call_token);
+    signaling_server = new WebSocket("ws://localhost:9000/socket");
+//    signaling_server = new WebSocket(apphost + "/signaling/" + call_token);
     signaling_server.onerror = log_error;
     signaling_server.onopen = function() {signaling_server.onmessage = signal_handler;};
 
@@ -441,4 +442,87 @@ function stopRinger() {
         destination: "server",
         type: "mute_ring"
     }));
+}
+var socket;
+var connectionID = 0;
+var userList = [];
+function signalEcho(event) {
+    var messageObj = JSON.parse(event.data);
+    if(messageObj.type == "id" && connectionID == 0) {
+        connectionID = parseInt(messageObj.message);
+        var ul = document.getElementById("user-list");
+        var li = document.createElement("li");
+        li.className = "list-group-item disabled";
+        li.appendChild(document.createTextNode(connectionID));
+        ul.appendChild(li);
+        userList.push(connectionID);
+    } else if(messageObj.type === "current_user_list") {
+        list = messageObj.message;
+        if(userList == list)
+            console.log("no change");
+        else {
+            userList = list;
+            var ul = document.getElementById("user-list");
+            while(ul.firstChild) {
+                ul.removeChild(ul.firstChild);
+            }
+            var li = document.createElement("li");
+            li.className = "list-group-item disabled";
+            li.appendChild(document.createTextNode(connectionID));
+            ul.appendChild(li);
+            userList.forEach(id => {
+                if(id === connectionID) return;
+                var li = document.createElement("li");
+                li.className = "list-group-item";
+                li.appendChild(document.createTextNode(id));
+                ul.appendChild(li);
+            })
+        }
+    }
+    var textarea = document.getElementById("incomingMessages");
+    var text = textarea.value;
+    textarea.value = text + '\n' + event.data;
+}
+
+function socketConnect() {
+    socket = new WebSocket("ws://" + window.location.host + "/socket");
+    socket.onerror = log_error;
+    socket.onopen = function() {
+        socket.onmessage = signalEcho;
+        var connectBtn = document.getElementById("connectButton");
+        var disconnectBtn = document.getElementById("disconnectButton");
+        connectBtn.classList.remove("btn-success");
+        connectBtn.classList.add("btn-secondary");
+        disconnectBtn.classList.remove("btn-secondary");
+        disconnectBtn.classList.add("btn-danger");
+        disconnectBtn.disabled = false;
+        connectBtn.disabled = true;
+    };
+    socket.onclose = socketDisconnect;
+}
+
+function socketDisconnect() {
+    socket.close();
+    var connectBtn = document.getElementById("connectButton");
+    var disconnectBtn = document.getElementById("disconnectButton");
+    connectBtn.classList.remove("btn-secondary");
+    connectBtn.classList.add("btn-success");
+    disconnectBtn.classList.remove("btn-danger");
+    disconnectBtn.classList.add("btn-secondary");
+    disconnectBtn.disabled = true;
+    connectBtn.disabled = false;
+    var ul = document.getElementById("user-list");
+    while(ul.firstChild) {
+        ul.removeChild(ul.firstChild);
+    }
+    connectionID = 0;
+    userList = [];
+}
+
+function sendMessage() {
+    socket.send(JSON.stringify({
+        destination: "server",
+        type: document.getElementById("outgoingMessage").value
+    }));
+    document.getElementById("outgoingMessage").value = "";
 }
