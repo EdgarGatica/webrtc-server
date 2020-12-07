@@ -1,3 +1,4 @@
+/*
 var turn_url = "96.88.47.226";
 var turn_username = "tm";
 var turn_credential = "nopassword";
@@ -409,9 +410,6 @@ function toggleButton(btnID, enable) {
     }
 }
 
-function log_error(error) {
-    console.log(error);
-}
 
 function muteMic() {
     if(local_stream && local_stream.getAudioTracks().length > 0) {
@@ -443,11 +441,22 @@ function stopRinger() {
         type: "mute_ring"
     }));
 }
+*/
+
+function log_error(error) {
+    console.log(error);
+}
+
+/*
+Start of signaling server communications section.
+*/
 var socket;
-var connectionID = 0;
+var connectionID = 0, destinationID = 0;
 var userList = [];
+
 function signalEcho(event) {
     var messageObj = JSON.parse(event.data);
+    console.log(event.data);
     if(messageObj.type == "id" && connectionID == 0) {
         connectionID = parseInt(messageObj.message);
         var ul = document.getElementById("user-list");
@@ -474,6 +483,8 @@ function signalEcho(event) {
                 if(id === connectionID) return;
                 var li = document.createElement("li");
                 li.className = "list-group-item";
+                li.dataset.pid = id;
+                li.onclick = listItemClicked;
                 li.appendChild(document.createTextNode(id));
                 ul.appendChild(li);
             })
@@ -520,9 +531,99 @@ function socketDisconnect() {
 }
 
 function sendMessage() {
-    socket.send(JSON.stringify({
-        destination: "server",
-        type: document.getElementById("outgoingMessage").value
-    }));
+    var message = JSON.stringify({
+                          destination: destinationID === 0 ? "server" : destinationID,
+                          message: document.getElementById("outgoingMessage").value
+                      });
+    console.log("Outgoing message: " + message);
+    socket.send(message);
     document.getElementById("outgoingMessage").value = "";
 }
+
+function listItemClicked() {
+    if(destinationID === this.dataset.pid) {
+        return;
+    }
+    destinationID = this.dataset.pid;
+    var textarea = document.getElementById("incomingMessages");
+    var text = textarea.value;
+    textarea.value = text + '\n' + "Now chatting with " + destinationID;
+}
+
+/*
+End of signaling server communications section.
+*/
+
+/*Start of getUserMedia section.*/
+if (navigator.mediaDevices == undefined) {
+    alert("Insecure origin or no access to getUserMedia");
+}
+
+var local_stream;
+
+var gum_constraints = {
+    "audio": true,
+    "video": {
+        width: {min: 1280, ideal: 1920, max: 1920},
+        height: {min: 720, ideal: 1080, max: 1080}
+    }
+};
+function repositionLocalVideo() {
+    var vid = document.getElementById("selfie");
+    vid.play();
+    vid.style.display = "block";
+}
+
+function gUMConnect() {
+    navigator.mediaDevices.getUserMedia(gum_constraints)
+        .then(function(mediaStream) {
+            var video = document.getElementById("selfie");
+            local_stream = mediaStream;
+            video.srcObject = mediaStream;
+            video.onloadedmetadata = repositionLocalVideo;
+        })
+        .catch(function(err) {
+            console.log(err.name + ": " + err.message);
+        });
+    toggleButton("disconnectGUMButton", true);
+    toggleButton("connectGUMButton", false);
+}
+
+function gUMDisconnect() {
+    if(local_stream != null && !local_stream.ended){
+        var tracks = local_stream.getVideoTracks();
+        if (tracks && tracks[0] && tracks[0].stop) tracks[0].stop();
+        local_stream = null;
+    }
+    document.getElementById("selfie").src = "";
+    toggleButton("disconnectGUMButton", false);
+    toggleButton("connectGUMButton", true);
+}
+
+function toggleButton(btnID, enable) {
+    var btn = document.getElementById(btnID);
+    if(btn == null) return;
+    if(enable) {
+        btn.className = "btn btn-success";
+        btn.disabled = false;
+        if(btnID === "connectGUMButton")
+            btn.onclick = gUMConnect;
+        else if(btnID === "disconnectGUMButton") {
+            btn.className = "btn btn-danger";
+            btn.onclick = gUMDisconnect;
+        } else if(btnID === "mute_mic_button") {
+            btn.onclick = muteMic;
+        } else if(btnID === "redial_button") {
+            btn.onclick = redial;
+        } else if(btnID === "ringer_off") {
+            btn.className = "btn btn-warning";
+            btn.onclick = stopRinger;
+        }
+    } else {
+        btn.className = "btn btn-default";
+        btn.disabled = true;
+        btn.onclick = null;
+    }
+}
+
+/*End of getUserMedia section*/

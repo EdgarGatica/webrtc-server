@@ -31,6 +31,7 @@ public class SignalingServer extends AbstractActor {
         return receiveBuilder()
                 .match(JsonNode.class, (msg) -> {
                     String destination = msg.path("destination").asText();
+                    System.out.println("'" + destination + "'");
                     if(destination.equals("server")) {
                         System.out.println(msg);
                     } else if(destination.equals("broadcast")) {
@@ -44,13 +45,16 @@ public class SignalingServer extends AbstractActor {
                                         .put("message", msg.path("message").asText()),
                                     self());
                         }
-                    } else if(msg.path("destination").isIntegralNumber()) {
+                    } else if(msg.path("destination").asInt(-999) > 1) {
                         int destinationID = msg.path("destination").asInt();
+                        System.out.println("Forwarding message to: " + destinationID);
                         connectionMap.get(destinationID).tell(Json.newObject()
                                         .put("type", "direct")
                                         .put("source", this.id)
                                         .put("message", msg.path("message").asText()),
                                 self());
+                    } else {
+                        System.out.println("Unexpected destination");
                     }
                 })
                 .build();
